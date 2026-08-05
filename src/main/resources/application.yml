@@ -39,10 +39,7 @@ spring:
           min-idle: 0
 
   cache:
-    type: redis
-    redis:
-      time-to-live: 3600000
-      key-prefix: book_catalog_
+    type: simple
 
 springdoc:
   api-docs:
