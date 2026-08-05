@@ -1,6 +1,11 @@
 package com.eyebuy.bookcatalog.service.impl;
 
-import com.eyebuy.bookcatalog.dto.*;
+import com.eyebuy.bookcatalog.dto.BookCreateRequest;
+import com.eyebuy.bookcatalog.dto.BookResponse;
+import com.eyebuy.bookcatalog.dto.BookSearchRequest;
+import com.eyebuy.bookcatalog.dto.BookUpdateRequest;
+import com.eyebuy.bookcatalog.dto.ExportResult;
+import com.eyebuy.bookcatalog.dto.PageResponse;
 import com.eyebuy.bookcatalog.entity.Book;
 import com.eyebuy.bookcatalog.event.BookEvent;
 import com.eyebuy.bookcatalog.event.EventPublisher;
@@ -30,7 +35,11 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -129,7 +138,9 @@ public class BookServiceImpl implements BookService {
     @Override
     @Transactional(readOnly = true)
     public List<BookResponse> getAllBooks() {
-        return bookRepository.findAll().stream()
+        // 使用分页保护，避免数据量过大导致 OOM（最大返回 1000 条）
+        Pageable limit = PageRequest.of(0, 1000, Sort.by(Sort.Direction.ASC, "id"));
+        return bookRepository.findAll(limit).stream()
                 .map(BookResponse::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -221,8 +232,8 @@ public class BookServiceImpl implements BookService {
 
         return allBooks.stream()
                 .filter(book -> matchesRelevance(book, normalizedQuery))
-                .sorted((b1, b2) -> calculateRelevanceScore(b2, normalizedQuery)
-                        - calculateRelevanceScore(b1, normalizedQuery))
+                .sorted(Comparator.comparingInt(
+                        (Book b) -> calculateRelevanceScore(b, normalizedQuery)).reversed())
                 .map(BookResponse::fromEntity)
                 .collect(Collectors.toList());
     }

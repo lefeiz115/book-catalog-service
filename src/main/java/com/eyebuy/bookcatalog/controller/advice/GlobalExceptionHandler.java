@@ -7,6 +7,7 @@ import com.eyebuy.bookcatalog.exception.InvalidBookStateException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -54,8 +55,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String requiredTypeName = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
         String message = String.format("Invalid value '%s' for parameter '%s'. Expected type: %s",
-                ex.getValue(), ex.getName(), ex.getRequiredType().getSimpleName());
+                ex.getValue(), ex.getName(), requiredTypeName);
         log.warn("Type mismatch: {}", message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(400, message));
@@ -80,6 +82,13 @@ public class GlobalExceptionHandler {
         log.error("Data integrity violation: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(409, "Data integrity violation: " + ex.getMostSpecificCause().getMessage()));
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException ex) {
+        log.warn("Optimistic lock conflict: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(409, "Data has been modified by another transaction, please retry"));
     }
 
     @ExceptionHandler(DataAccessException.class)

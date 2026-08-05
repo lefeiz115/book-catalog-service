@@ -1,5 +1,7 @@
 package com.eyebuy.bookcatalog.dto;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -29,13 +31,16 @@ public class BookCreateRequest {
     @Size(max = 50, message = "类型长度不能超过50字符")
     private String genre;
 
+    @DecimalMin(value = "0.00", message = "价格不能为负数")
     private BigDecimal price;
 
     @Size(max = 2000, message = "描述长度不能超过2000字符")
     private String description;
 
+    @Min(value = 0, message = "库存不能为负数")
     private Integer stock;
 
+    @Min(value = 0, message = "页数不能为负数")
     private Integer pages;
 
     @Size(max = 50, message = "出版社长度不能超过50字符")

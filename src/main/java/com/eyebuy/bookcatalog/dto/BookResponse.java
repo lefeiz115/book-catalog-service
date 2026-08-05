@@ -20,7 +20,6 @@ public class BookResponse {
     private String author;
     private String isbn;
     private String genre;
-    private String genreDisplayName;
     private BigDecimal price;
     private String description;
     private Integer stock;

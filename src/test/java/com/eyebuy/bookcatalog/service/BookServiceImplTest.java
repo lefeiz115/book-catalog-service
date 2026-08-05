@@ -647,8 +647,9 @@ class BookServiceImplTest {
                     createTestBook(1L, "Book 1", "Author 1", "111", "Fiction", null, 100, true),
                     createTestBook(2L, "Book 2", "Author 2", "2222222222222", "Fiction", null, 50, true)
             );
+            Page<Book> page = new PageImpl<>(books);
 
-            when(bookRepository.findAll()).thenReturn(books);
+            when(bookRepository.findAll(any(Pageable.class))).thenReturn(page);
 
             List<BookResponse> responses = bookService.getAllBooks();
 
@@ -658,7 +659,9 @@ class BookServiceImplTest {
         @Test
         @DisplayName("Should return empty list when no books")
         void getAllBooksEmpty() {
-            when(bookRepository.findAll()).thenReturn(Collections.emptyList());
+            Page<Book> emptyPage = new PageImpl<>(Collections.emptyList());
+
+            when(bookRepository.findAll(any(Pageable.class))).thenReturn(emptyPage);
 
             List<BookResponse> responses = bookService.getAllBooks();
 

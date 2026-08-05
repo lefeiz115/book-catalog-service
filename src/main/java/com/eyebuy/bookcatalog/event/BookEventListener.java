@@ -14,15 +14,15 @@ public class BookEventListener {
     public void onBookEvent(BookEvent event) {
         BookEvent.BookData data = event.getBookData();
         switch (event.getEventType()) {
-            case CREATED -> log.info("📚 Book created: id={}, title={}, author={}",
+            case CREATED -> log.info("Book created: id={}, title={}, author={}",
                     data.id(), data.title(), data.author());
-            case UPDATED -> log.info("📝 Book updated: id={}, title={}",
+            case UPDATED -> log.info("Book updated: id={}, title={}",
                     data.id(), data.title());
-            case DELETED -> log.info("🗑️ Book deleted: id={}, title={}",
+            case DELETED -> log.info("Book deleted: id={}, title={}",
                     data.id(), data.title());
-            case STOCK_CHANGED -> log.info("📦 Stock changed: id={}, title={}, stock={}, detail={}",
+            case STOCK_CHANGED -> log.info("Stock changed: id={}, title={}, stock={}, detail={}",
                     data.id(), data.title(), data.stock(), event.getDetail());
-            case STATUS_CHANGED -> log.info("🔄 Status changed: id={}, title={}, active={}, detail={}",
+            case STATUS_CHANGED -> log.info("Status changed: id={}, title={}, active={}, detail={}",
                     data.id(), data.title(), data.active(), event.getDetail());
         }
     }
