@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BookServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">book-catalog-service</a> &gt; <a href="index.source.html" class="el_package">com.eyebuy.bookcatalog.service.impl</a> &gt; <span class="el_source">BookServiceImpl.java</span></div><h1>BookServiceImpl.java</h1><pre class="source lang-java linenums">package com.eyebuy.bookcatalog.service.impl;
+
+import com.eyebuy.bookcatalog.dto.*;
+import com.eyebuy.bookcatalog.entity.Book;
+import com.eyebuy.bookcatalog.event.BookEvent;
+import com.eyebuy.bookcatalog.event.EventPublisher;
+import com.eyebuy.bookcatalog.exception.BookNotFoundException;
+import com.eyebuy.bookcatalog.exception.DuplicateBookException;
+import com.eyebuy.bookcatalog.exception.InvalidBookStateException;
+import com.eyebuy.bookcatalog.repository.BookRepository;
+import com.eyebuy.bookcatalog.service.BookService;
+import com.eyebuy.bookcatalog.service.strategy.BookSearchStrategy;
+import com.eyebuy.bookcatalog.service.template.BookExportTemplate;
+import com.eyebuy.bookcatalog.service.template.CsvBookExporter;
+import com.eyebuy.bookcatalog.service.template.JsonBookExporter;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+<span class="fc" id="L38">@Slf4j</span>
+@Service
+<span class="fc" id="L40">@RequiredArgsConstructor</span>
+@CacheConfig(cacheNames = &quot;books&quot;)
+public class BookServiceImpl implements BookService {
+
+    private final BookRepository bookRepository;
+    private final EntityManager entityManager;
+    private final EventPublisher eventPublisher;
+    private final Map&lt;String, BookSearchStrategy&gt; strategyMap;
+    private final CsvBookExporter csvExporter;
+    private final JsonBookExporter jsonExporter;
+
+<span class="fc" id="L51">    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd&quot;);</span>
+
+    @Override
+    @Transactional
+    public BookResponse createBook(BookCreateRequest request) {
+<span class="fc bfc" id="L56" title="All 4 branches covered.">        if (StringUtils.hasText(request.getIsbn()) &amp;&amp; bookRepository.existsByIsbn(request.getIsbn())) {</span>
+<span class="fc" id="L57">            throw new DuplicateBookException(&quot;isbn&quot;, request.getIsbn());</span>
+        }
+
+<span class="fc" id="L60">        Book book = Book.builder()</span>
+<span class="fc" id="L61">                .title(request.getTitle())</span>
+<span class="fc" id="L62">                .author(request.getAuthor())</span>
+<span class="fc" id="L63">                .isbn(request.getIsbn())</span>
+<span class="fc" id="L64">                .genre(request.getGenre())</span>
+<span class="fc" id="L65">                .price(request.getPrice())</span>
+<span class="fc" id="L66">                .description(request.getDescription())</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">                .stock(request.getStock() != null ? request.getStock() : 0)</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">                .pages(request.getPages() != null ? request.getPages() : 0)</span>
+<span class="fc" id="L69">                .publisher(request.getPublisher())</span>
+<span class="fc" id="L70">                .publishDate(parseDate(request.getPublishDate()))</span>
+<span class="fc" id="L71">                .active(true)</span>
+<span class="fc" id="L72">                .build();</span>
+
+<span class="fc" id="L74">        Book saved = bookRepository.save(book);</span>
+
+<span class="fc" id="L76">        eventPublisher.publishBookCreated(this, toBookData(saved));</span>
+
+<span class="fc" id="L78">        log.info(&quot;Book created successfully: id={}, title={}&quot;, saved.getId(), saved.getTitle());</span>
+<span class="fc" id="L79">        return BookResponse.fromEntity(saved);</span>
+    }
+
+    @Override
+    @Cacheable(key = &quot;#id&quot;, unless = &quot;#result == null&quot;)
+    @Transactional(readOnly = true)
+    public BookResponse getBookById(Long id) {
+<span class="fc" id="L86">        Book book = bookRepository.findById(id)</span>
+<span class="fc" id="L87">                .orElseThrow(() -&gt; new BookNotFoundException(id));</span>
+<span class="fc" id="L88">        return BookResponse.fromEntity(book);</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(key = &quot;#id&quot;)
+    public BookResponse updateBook(Long id, BookUpdateRequest request) {
+<span class="fc" id="L95">        Book book = bookRepository.findById(id)</span>
+<span class="fc" id="L96">                .orElseThrow(() -&gt; new BookNotFoundException(id));</span>
+
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        if (StringUtils.hasText(request.getIsbn())</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">                &amp;&amp; !request.getIsbn().equals(book.getIsbn())) {</span>
+<span class="fc" id="L100">            bookRepository.findByIsbnAndIdNot(request.getIsbn(), id)</span>
+<span class="fc" id="L101">                    .ifPresent(existing -&gt; {</span>
+<span class="fc" id="L102">                        throw new DuplicateBookException(&quot;isbn&quot;, request.getIsbn());</span>
+                    });
+        }
+
+<span class="fc" id="L106">        updateBookFields(book, request);</span>
+<span class="fc" id="L107">        Book updated = bookRepository.save(book);</span>
+
+<span class="fc" id="L109">        eventPublisher.publishBookUpdated(this, toBookData(updated));</span>
+
+<span class="fc" id="L111">        log.info(&quot;Book updated successfully: id={}, title={}&quot;, updated.getId(), updated.getTitle());</span>
+<span class="fc" id="L112">        return BookResponse.fromEntity(updated);</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(key = &quot;#id&quot;)
+    public void deleteBook(Long id) {
+<span class="fc" id="L119">        Book book = bookRepository.findById(id)</span>
+<span class="fc" id="L120">                .orElseThrow(() -&gt; new BookNotFoundException(id));</span>
+
+<span class="pc bpc" id="L122" title="1 of 4 branches missed.">        if (book.getStock() != null &amp;&amp; book.getStock() &gt; 0) {</span>
+<span class="fc" id="L123">            throw new InvalidBookStateException(&quot;Cannot delete book with remaining stock. Stock: &quot; + book.getStock());</span>
+        }
+
+<span class="fc" id="L126">        bookRepository.delete(book);</span>
+
+<span class="fc" id="L128">        eventPublisher.publishBookDeleted(this, toBookData(book));</span>
+
+<span class="fc" id="L130">        log.info(&quot;Book deleted successfully: id={}, title={}&quot;, book.getId(), book.getTitle());</span>
+<span class="fc" id="L131">    }</span>
+
+    @Override
+    @Transactional(readOnly = true)
+    public List&lt;BookResponse&gt; getAllBooks() {
+<span class="fc" id="L136">        return bookRepository.findAll().stream()</span>
+<span class="fc" id="L137">                .map(BookResponse::fromEntity)</span>
+<span class="fc" id="L138">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse&lt;BookResponse&gt; searchBooks(BookSearchRequest request) {
+<span class="fc" id="L144">        Specification&lt;Book&gt; spec = buildSpecification(request);</span>
+
+<span class="fc" id="L146">        Sort sort = buildSort(request);</span>
+<span class="fc" id="L147">        Pageable pageable = PageRequest.of(</span>
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">                request.getPage() != null ? request.getPage() : 0,</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">                request.getSize() != null ? request.getSize() : 10,</span>
+                sort
+        );
+
+<span class="fc" id="L153">        Page&lt;Book&gt; page = bookRepository.findAll(spec, pageable);</span>
+
+<span class="fc" id="L155">        List&lt;BookResponse&gt; content = page.getContent().stream()</span>
+<span class="fc" id="L156">                .map(BookResponse::fromEntity)</span>
+<span class="fc" id="L157">                .collect(Collectors.toList());</span>
+
+<span class="fc" id="L159">        return PageResponse.of(content, page.getTotalElements(), page.getNumber(), page.getSize());</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(key = &quot;#id&quot;)
+    public BookResponse updateStock(Long id, Integer stockDelta) {
+<span class="fc" id="L166">        Book book = bookRepository.findById(id)</span>
+<span class="pc" id="L167">                .orElseThrow(() -&gt; new BookNotFoundException(id));</span>
+
+<span class="fc bfc" id="L169" title="All 2 branches covered.">        int currentStock = book.getStock() != null ? book.getStock() : 0;</span>
+<span class="fc" id="L170">        int newStock = currentStock + stockDelta;</span>
+
+<span class="fc bfc" id="L172" title="All 2 branches covered.">        if (newStock &lt; 0) {</span>
+<span class="fc" id="L173">            throw new InvalidBookStateException(</span>
+<span class="fc" id="L174">                    String.format(&quot;Insufficient stock. Current: %d, Requested change: %d&quot;, currentStock, stockDelta));</span>
+        }
+
+<span class="fc" id="L177">        book.setStock(newStock);</span>
+<span class="fc" id="L178">        Book updated = bookRepository.save(book);</span>
+
+<span class="fc" id="L180">        String detail = String.format(&quot;Stock changed from %d to %d (delta: %d)&quot;, currentStock, newStock, stockDelta);</span>
+<span class="fc" id="L181">        eventPublisher.publishStockChanged(this, toBookData(updated), detail);</span>
+
+<span class="fc" id="L183">        log.info(&quot;Stock updated: id={}, {} -&gt; {}&quot;, id, currentStock, newStock);</span>
+<span class="fc" id="L184">        return BookResponse.fromEntity(updated);</span>
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(key = &quot;#id&quot;)
+    public BookResponse toggleActive(Long id) {
+<span class="fc" id="L191">        Book book = bookRepository.findById(id)</span>
+<span class="pc" id="L192">                .orElseThrow(() -&gt; new BookNotFoundException(id));</span>
+
+<span class="fc bfc" id="L194" title="All 2 branches covered.">        boolean newStatus = !Boolean.TRUE.equals(book.getActive());</span>
+<span class="fc" id="L195">        book.setActive(newStatus);</span>
+<span class="fc" id="L196">        Book updated = bookRepository.save(book);</span>
+
+<span class="fc bfc" id="L198" title="All 2 branches covered.">        String detail = String.format(&quot;Status changed to: %s&quot;, newStatus ? &quot;active&quot; : &quot;inactive&quot;);</span>
+<span class="fc" id="L199">        eventPublisher.publishStatusChanged(this, toBookData(updated), detail);</span>
+
+<span class="fc" id="L201">        log.info(&quot;Book status toggled: id={}, active={}&quot;, id, newStatus);</span>
+<span class="fc" id="L202">        return BookResponse.fromEntity(updated);</span>
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExportResult exportBooks(BookSearchRequest request, String format) {
+<span class="fc" id="L208">        Specification&lt;Book&gt; spec = buildSpecification(request);</span>
+<span class="fc" id="L209">        List&lt;Book&gt; books = bookRepository.findAll(spec);</span>
+
+<span class="fc" id="L211">        BookExportTemplate exporter = getExporter(format);</span>
+<span class="fc" id="L212">        return exporter.export(books);</span>
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List&lt;BookResponse&gt; aiSmartSearch(String query) {
+<span class="fc bfc" id="L218" title="All 2 branches covered.">        if (!StringUtils.hasText(query)) {</span>
+<span class="fc" id="L219">            return Collections.emptyList();</span>
+        }
+
+<span class="fc" id="L222">        String normalizedQuery = query.trim().toLowerCase();</span>
+
+<span class="fc" id="L224">        List&lt;Book&gt; allBooks = bookRepository.findByActiveTrue();</span>
+
+<span class="fc" id="L226">        return allBooks.stream()</span>
+<span class="fc" id="L227">                .filter(book -&gt; matchesRelevance(book, normalizedQuery))</span>
+<span class="fc" id="L228">                .sorted((b1, b2) -&gt; calculateRelevanceScore(b2, normalizedQuery)</span>
+<span class="fc" id="L229">                        - calculateRelevanceScore(b1, normalizedQuery))</span>
+<span class="fc" id="L230">                .map(BookResponse::fromEntity)</span>
+<span class="fc" id="L231">                .collect(Collectors.toList());</span>
+    }
+
+    private boolean matchesRelevance(Book book, String query) {
+<span class="pc bpc" id="L235" title="1 of 4 branches missed.">        if (StringUtils.hasText(book.getTitle()) &amp;&amp; book.getTitle().toLowerCase().contains(query)) {</span>
+<span class="fc" id="L236">            return true;</span>
+        }
+<span class="pc bpc" id="L238" title="1 of 4 branches missed.">        if (StringUtils.hasText(book.getAuthor()) &amp;&amp; book.getAuthor().toLowerCase().contains(query)) {</span>
+<span class="fc" id="L239">            return true;</span>
+        }
+<span class="pc bpc" id="L241" title="1 of 4 branches missed.">        if (StringUtils.hasText(book.getDescription()) &amp;&amp; book.getDescription().toLowerCase().contains(query)) {</span>
+<span class="fc" id="L242">            return true;</span>
+        }
+<span class="pc bpc" id="L244" title="2 of 4 branches missed.">        if (StringUtils.hasText(book.getGenre()) &amp;&amp; book.getGenre().toLowerCase().contains(query)) {</span>
+<span class="nc" id="L245">            return true;</span>
+        }
+
+<span class="fc" id="L248">        String[] tokens = query.split(&quot;\\s+&quot;);</span>
+<span class="fc bfc" id="L249" title="All 2 branches covered.">        for (String token : tokens) {</span>
+<span class="pc bpc" id="L250" title="1 of 2 branches missed.">            if (token.length() &lt; 2) continue;</span>
+<span class="pc bpc" id="L251" title="1 of 4 branches missed.">            if (StringUtils.hasText(book.getTitle()) &amp;&amp; book.getTitle().toLowerCase().contains(token)) {</span>
+<span class="fc" id="L252">                return true;</span>
+            }
+<span class="pc bpc" id="L254" title="2 of 4 branches missed.">            if (StringUtils.hasText(book.getAuthor()) &amp;&amp; book.getAuthor().toLowerCase().contains(token)) {</span>
+<span class="nc" id="L255">                return true;</span>
+            }
+<span class="pc bpc" id="L257" title="2 of 4 branches missed.">            if (StringUtils.hasText(book.getDescription()) &amp;&amp; book.getDescription().toLowerCase().contains(token)) {</span>
+<span class="nc" id="L258">                return true;</span>
+            }
+        }
+<span class="fc" id="L261">        return false;</span>
+    }
+
+    private int calculateRelevanceScore(Book book, String query) {
+<span class="fc" id="L265">        int score = 0;</span>
+<span class="pc bpc" id="L266" title="1 of 2 branches missed.">        String title = book.getTitle() != null ? book.getTitle().toLowerCase() : &quot;&quot;;</span>
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">        String author = book.getAuthor() != null ? book.getAuthor().toLowerCase() : &quot;&quot;;</span>
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">        String description = book.getDescription() != null ? book.getDescription().toLowerCase() : &quot;&quot;;</span>
+
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">        if (title.equals(query)) score += 100;</span>
+<span class="fc bfc" id="L271" title="All 2 branches covered.">        else if (title.startsWith(query)) score += 80;</span>
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        else if (title.contains(query)) score += 50;</span>
+
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">        if (author.equals(query)) score += 70;</span>
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">        else if (author.startsWith(query)) score += 50;</span>
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">        else if (author.contains(query)) score += 30;</span>
+
+<span class="fc bfc" id="L278" title="All 2 branches covered.">        if (description.contains(query)) score += 10;</span>
+
+<span class="fc" id="L280">        String[] tokens = query.split(&quot;\\s+&quot;);</span>
+<span class="fc bfc" id="L281" title="All 2 branches covered.">        for (String token : tokens) {</span>
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">            if (token.length() &lt; 2) continue;</span>
+<span class="fc bfc" id="L283" title="All 2 branches covered.">            if (title.contains(token)) score += 20;</span>
+<span class="pc bpc" id="L284" title="1 of 2 branches missed.">            if (author.contains(token)) score += 15;</span>
+<span class="fc bfc" id="L285" title="All 2 branches covered.">            if (description.contains(token)) score += 5;</span>
+        }
+
+<span class="fc" id="L288">        return score;</span>
+    }
+
+    private BookExportTemplate getExporter(String format) {
+<span class="pc bpc" id="L292" title="1 of 6 branches missed.">        if (format == null || format.isBlank() || &quot;csv&quot;.equalsIgnoreCase(format)) {</span>
+<span class="fc" id="L293">            return csvExporter;</span>
+        }
+<span class="fc bfc" id="L295" title="All 2 branches covered.">        if (&quot;json&quot;.equalsIgnoreCase(format)) {</span>
+<span class="fc" id="L296">            return jsonExporter;</span>
+        }
+<span class="fc" id="L298">        throw new IllegalArgumentException(&quot;Unsupported export format: &quot; + format + &quot;. Supported: csv, json&quot;);</span>
+    }
+
+    private Specification&lt;Book&gt; buildSpecification(BookSearchRequest request) {
+<span class="fc" id="L302">        return (root, query, cb) -&gt; {</span>
+<span class="nc" id="L303">            List&lt;Predicate&gt; predicates = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L305" title="All 2 branches missed.">            if (StringUtils.hasText(request.getKeyword())) {</span>
+<span class="nc" id="L306">                String likePattern = &quot;%&quot; + request.getKeyword().toLowerCase() + &quot;%&quot;;</span>
+<span class="nc" id="L307">                predicates.add(cb.or(</span>
+<span class="nc" id="L308">                        cb.like(cb.lower(root.get(&quot;title&quot;)), likePattern),</span>
+<span class="nc" id="L309">                        cb.like(cb.lower(root.get(&quot;author&quot;)), likePattern),</span>
+<span class="nc" id="L310">                        cb.like(cb.lower(root.get(&quot;description&quot;)), likePattern)</span>
+                ));
+            }
+
+<span class="nc bnc" id="L314" title="All 2 branches missed.">            if (StringUtils.hasText(request.getAuthor())) {</span>
+<span class="nc" id="L315">                predicates.add(cb.like(cb.lower(root.get(&quot;author&quot;)),</span>
+<span class="nc" id="L316">                        &quot;%&quot; + request.getAuthor().toLowerCase() + &quot;%&quot;));</span>
+            }
+
+<span class="nc bnc" id="L319" title="All 2 branches missed.">            if (StringUtils.hasText(request.getGenre())) {</span>
+<span class="nc" id="L320">                predicates.add(cb.equal(root.get(&quot;genre&quot;), request.getGenre()));</span>
+            }
+
+<span class="nc bnc" id="L323" title="All 2 branches missed.">            if (StringUtils.hasText(request.getIsbn())) {</span>
+<span class="nc" id="L324">                predicates.add(cb.like(cb.lower(root.get(&quot;isbn&quot;)),</span>
+<span class="nc" id="L325">                        &quot;%&quot; + request.getIsbn().toLowerCase() + &quot;%&quot;));</span>
+            }
+
+<span class="nc bnc" id="L328" title="All 2 branches missed.">            if (request.getMinPrice() != null) {</span>
+<span class="nc" id="L329">                predicates.add(cb.greaterThanOrEqualTo(root.get(&quot;price&quot;), request.getMinPrice()));</span>
+            }
+
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            if (request.getMaxPrice() != null) {</span>
+<span class="nc" id="L333">                predicates.add(cb.lessThanOrEqualTo(root.get(&quot;price&quot;), request.getMaxPrice()));</span>
+            }
+
+<span class="nc bnc" id="L336" title="All 2 branches missed.">            if (request.getActive() != null) {</span>
+<span class="nc" id="L337">                predicates.add(cb.equal(root.get(&quot;active&quot;), request.getActive()));</span>
+            }
+
+<span class="nc" id="L340">            return cb.and(predicates.toArray(new Predicate[0]));</span>
+        };
+    }
+
+    private Sort buildSort(BookSearchRequest request) {
+<span class="pc bpc" id="L345" title="1 of 2 branches missed.">        if (!StringUtils.hasText(request.getSortBy())) {</span>
+<span class="fc" id="L346">            return Sort.by(Sort.Direction.DESC, &quot;updateTime&quot;);</span>
+        }
+<span class="nc bnc" id="L348" title="All 2 branches missed.">        Sort.Direction direction = &quot;asc&quot;.equalsIgnoreCase(request.getSortDirection())</span>
+<span class="nc" id="L349">                ? Sort.Direction.ASC : Sort.Direction.DESC;</span>
+
+<span class="nc bnc" id="L351" title="All 7 branches missed.">        return switch (request.getSortBy().toLowerCase()) {</span>
+<span class="nc" id="L352">            case &quot;title&quot; -&gt; Sort.by(direction, &quot;title&quot;);</span>
+<span class="nc" id="L353">            case &quot;author&quot; -&gt; Sort.by(direction, &quot;author&quot;);</span>
+<span class="nc" id="L354">            case &quot;price&quot; -&gt; Sort.by(direction, &quot;price&quot;);</span>
+<span class="nc" id="L355">            case &quot;stock&quot; -&gt; Sort.by(direction, &quot;stock&quot;);</span>
+<span class="nc" id="L356">            case &quot;createtime&quot;, &quot;create_time&quot; -&gt; Sort.by(direction, &quot;createTime&quot;);</span>
+<span class="nc" id="L357">            case &quot;updatetime&quot;, &quot;update_time&quot; -&gt; Sort.by(direction, &quot;updateTime&quot;);</span>
+<span class="nc" id="L358">            default -&gt; Sort.by(Sort.Direction.DESC, &quot;updateTime&quot;);</span>
+        };
+    }
+
+    private void updateBookFields(Book book, BookUpdateRequest request) {
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">        if (StringUtils.hasText(request.getTitle())) {</span>
+<span class="fc" id="L364">            book.setTitle(request.getTitle());</span>
+        }
+<span class="fc bfc" id="L366" title="All 2 branches covered.">        if (StringUtils.hasText(request.getAuthor())) {</span>
+<span class="fc" id="L367">            book.setAuthor(request.getAuthor());</span>
+        }
+<span class="fc bfc" id="L369" title="All 2 branches covered.">        if (request.getIsbn() != null) {</span>
+<span class="fc" id="L370">            book.setIsbn(request.getIsbn());</span>
+        }
+<span class="fc bfc" id="L372" title="All 2 branches covered.">        if (request.getGenre() != null) {</span>
+<span class="fc" id="L373">            book.setGenre(request.getGenre());</span>
+        }
+<span class="pc bpc" id="L375" title="1 of 2 branches missed.">        if (request.getPrice() != null) {</span>
+<span class="fc" id="L376">            book.setPrice(request.getPrice());</span>
+        }
+<span class="fc bfc" id="L378" title="All 2 branches covered.">        if (request.getDescription() != null) {</span>
+<span class="fc" id="L379">            book.setDescription(request.getDescription());</span>
+        }
+<span class="fc bfc" id="L381" title="All 2 branches covered.">        if (request.getStock() != null) {</span>
+<span class="fc" id="L382">            book.setStock(request.getStock());</span>
+        }
+<span class="fc bfc" id="L384" title="All 2 branches covered.">        if (request.getPages() != null) {</span>
+<span class="fc" id="L385">            book.setPages(request.getPages());</span>
+        }
+<span class="fc bfc" id="L387" title="All 2 branches covered.">        if (request.getPublisher() != null) {</span>
+<span class="fc" id="L388">            book.setPublisher(request.getPublisher());</span>
+        }
+<span class="fc bfc" id="L390" title="All 2 branches covered.">        if (request.getPublishDate() != null) {</span>
+<span class="fc" id="L391">            book.setPublishDate(parseDate(request.getPublishDate()));</span>
+        }
+<span class="fc bfc" id="L393" title="All 2 branches covered.">        if (request.getActive() != null) {</span>
+<span class="fc" id="L394">            book.setActive(request.getActive());</span>
+        }
+<span class="fc" id="L396">    }</span>
+
+    private LocalDateTime parseDate(String dateStr) {
+<span class="fc bfc" id="L399" title="All 2 branches covered.">        if (!StringUtils.hasText(dateStr)) {</span>
+<span class="fc" id="L400">            return null;</span>
+        }
+        try {
+<span class="fc" id="L403">            return LocalDate.parse(dateStr, DATE_FORMATTER).atStartOfDay();</span>
+<span class="nc" id="L404">        } catch (Exception e) {</span>
+<span class="nc" id="L405">            log.warn(&quot;Failed to parse date: {}&quot;, dateStr);</span>
+<span class="nc" id="L406">            return null;</span>
+        }
+    }
+
+    private BookEvent.BookData toBookData(Book book) {
+<span class="fc" id="L411">        return new BookEvent.BookData(</span>
+<span class="fc" id="L412">                book.getId(),</span>
+<span class="fc" id="L413">                book.getTitle(),</span>
+<span class="fc" id="L414">                book.getAuthor(),</span>
+<span class="fc" id="L415">                book.getGenre(),</span>
+<span class="fc" id="L416">                book.getStock(),</span>
+<span class="fc" id="L417">                book.getActive()</span>
+        );
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

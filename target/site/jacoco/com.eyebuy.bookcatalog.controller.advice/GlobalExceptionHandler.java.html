@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GlobalExceptionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">book-catalog-service</a> &gt; <a href="index.source.html" class="el_package">com.eyebuy.bookcatalog.controller.advice</a> &gt; <span class="el_source">GlobalExceptionHandler.java</span></div><h1>GlobalExceptionHandler.java</h1><pre class="source lang-java linenums">package com.eyebuy.bookcatalog.controller.advice;
+
+import com.eyebuy.bookcatalog.dto.ApiResponse;
+import com.eyebuy.bookcatalog.exception.BookNotFoundException;
+import com.eyebuy.bookcatalog.exception.DuplicateBookException;
+import com.eyebuy.bookcatalog.exception.InvalidBookStateException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import java.util.stream.Collectors;
+
+<span class="fc" id="L20">@Slf4j</span>
+@RestControllerAdvice
+<span class="fc" id="L22">public class GlobalExceptionHandler {</span>
+
+    @ExceptionHandler(BookNotFoundException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleBookNotFound(BookNotFoundException ex) {
+<span class="fc" id="L26">        log.warn(&quot;Book not found: {}&quot;, ex.getMessage());</span>
+<span class="fc" id="L27">        return ResponseEntity.status(HttpStatus.NOT_FOUND)</span>
+<span class="fc" id="L28">                .body(ApiResponse.error(404, ex.getMessage()));</span>
+    }
+
+    @ExceptionHandler(DuplicateBookException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleDuplicateBook(DuplicateBookException ex) {
+<span class="fc" id="L33">        log.warn(&quot;Duplicate book: {}&quot;, ex.getMessage());</span>
+<span class="fc" id="L34">        return ResponseEntity.status(HttpStatus.CONFLICT)</span>
+<span class="fc" id="L35">                .body(ApiResponse.error(409, ex.getMessage()));</span>
+    }
+
+    @ExceptionHandler(InvalidBookStateException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleInvalidBookState(InvalidBookStateException ex) {
+<span class="fc" id="L40">        log.warn(&quot;Invalid book state: {}&quot;, ex.getMessage());</span>
+<span class="fc" id="L41">        return ResponseEntity.status(HttpStatus.BAD_REQUEST)</span>
+<span class="fc" id="L42">                .body(ApiResponse.error(400, ex.getMessage()));</span>
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleValidation(MethodArgumentNotValidException ex) {
+<span class="fc" id="L47">        String errors = ex.getBindingResult().getFieldErrors().stream()</span>
+<span class="fc" id="L48">                .map(error -&gt; error.getField() + &quot;: &quot; + error.getDefaultMessage())</span>
+<span class="fc" id="L49">                .collect(Collectors.joining(&quot;; &quot;));</span>
+<span class="fc" id="L50">        log.warn(&quot;Validation failed: {}&quot;, errors);</span>
+<span class="fc" id="L51">        return ResponseEntity.status(HttpStatus.BAD_REQUEST)</span>
+<span class="fc" id="L52">                .body(ApiResponse.error(400, &quot;Validation failed: &quot; + errors));</span>
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+<span class="nc" id="L57">        String message = String.format(&quot;Invalid value '%s' for parameter '%s'. Expected type: %s&quot;,</span>
+<span class="nc" id="L58">                ex.getValue(), ex.getName(), ex.getRequiredType().getSimpleName());</span>
+<span class="nc" id="L59">        log.warn(&quot;Type mismatch: {}&quot;, message);</span>
+<span class="nc" id="L60">        return ResponseEntity.status(HttpStatus.BAD_REQUEST)</span>
+<span class="nc" id="L61">                .body(ApiResponse.error(400, message));</span>
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleMissingParam(MissingServletRequestParameterException ex) {
+<span class="nc" id="L66">        log.warn(&quot;Missing parameter: {}&quot;, ex.getParameterName());</span>
+<span class="nc" id="L67">        return ResponseEntity.status(HttpStatus.BAD_REQUEST)</span>
+<span class="nc" id="L68">                .body(ApiResponse.error(400, &quot;Missing required parameter: &quot; + ex.getParameterName()));</span>
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleIllegalArgument(IllegalArgumentException ex) {
+<span class="fc" id="L73">        log.warn(&quot;Illegal argument: {}&quot;, ex.getMessage());</span>
+<span class="fc" id="L74">        return ResponseEntity.status(HttpStatus.BAD_REQUEST)</span>
+<span class="fc" id="L75">                .body(ApiResponse.error(400, ex.getMessage()));</span>
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleDataIntegrity(DataIntegrityViolationException ex) {
+<span class="nc" id="L80">        log.error(&quot;Data integrity violation: {}&quot;, ex.getMessage(), ex);</span>
+<span class="nc" id="L81">        return ResponseEntity.status(HttpStatus.CONFLICT)</span>
+<span class="nc" id="L82">                .body(ApiResponse.error(409, &quot;Data integrity violation: &quot; + ex.getMostSpecificCause().getMessage()));</span>
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleDataAccess(DataAccessException ex) {
+<span class="nc" id="L87">        log.error(&quot;Data access error: {}&quot;, ex.getMessage(), ex);</span>
+<span class="nc" id="L88">        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)</span>
+<span class="nc" id="L89">                .body(ApiResponse.error(500, &quot;Database operation failed&quot;));</span>
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity&lt;ApiResponse&lt;Void&gt;&gt; handleGeneric(Exception ex) {
+<span class="nc" id="L94">        log.error(&quot;Unexpected error: {}&quot;, ex.getMessage(), ex);</span>
+<span class="nc" id="L95">        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)</span>
+<span class="nc" id="L96">                .body(ApiResponse.error(500, &quot;Internal server error&quot;));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

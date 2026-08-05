@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Book.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">book-catalog-service</a> &gt; <a href="index.source.html" class="el_package">com.eyebuy.bookcatalog.entity</a> &gt; <span class="el_source">Book.java</span></div><h1>Book.java</h1><pre class="source lang-java linenums">package com.eyebuy.bookcatalog.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = &quot;t_book&quot;, indexes = {
+        @Index(name = &quot;idx_book_title&quot;, columnList = &quot;title&quot;),
+        @Index(name = &quot;idx_book_author&quot;, columnList = &quot;author&quot;),
+        @Index(name = &quot;idx_book_genre&quot;, columnList = &quot;genre&quot;),
+        @Index(name = &quot;idx_book_isbn&quot;, columnList = &quot;isbn&quot;)
+})
+<span class="pc bnc" id="L19" title="All 126 branches missed.">@Data</span>
+<span class="pc bpc" id="L20" title="1 of 10 branches missed.">@Builder</span>
+<span class="fc" id="L21">@NoArgsConstructor</span>
+<span class="fc" id="L22">@AllArgsConstructor</span>
+public class Book {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<span class="fc" id="L27">    private Long id;</span>
+
+    @Column(nullable = false, length = 500)
+<span class="fc" id="L30">    private String title;</span>
+
+    @Column(nullable = false, length = 200)
+<span class="fc" id="L33">    private String author;</span>
+
+    @Column(length = 20)
+<span class="fc" id="L36">    private String isbn;</span>
+
+    @Column(length = 50)
+<span class="fc" id="L39">    private String genre;</span>
+
+    @Column(precision = 10, scale = 2)
+<span class="fc" id="L42">    private BigDecimal price;</span>
+
+    @Column(length = 2000)
+<span class="fc" id="L45">    private String description;</span>
+
+    @Column(nullable = false)
+    @Builder.Default
+<span class="fc" id="L49">    private Integer stock = 0;</span>
+
+    @Column(nullable = false)
+    @Builder.Default
+<span class="fc" id="L53">    private Integer pages = 0;</span>
+
+    @Column(length = 50)
+<span class="fc" id="L56">    private String publisher;</span>
+
+<span class="fc" id="L58">    private LocalDateTime publishDate;</span>
+
+    @Column(nullable = false)
+    @Builder.Default
+<span class="fc" id="L62">    private Boolean active = true;</span>
+
+    @Column(nullable = false, updatable = false)
+    @Builder.Default
+<span class="fc" id="L66">    private LocalDateTime createTime = LocalDateTime.now();</span>
+
+    @Column(nullable = false)
+    @Builder.Default
+<span class="fc" id="L70">    private LocalDateTime updateTime = LocalDateTime.now();</span>
+
+    @Version
+<span class="fc" id="L73">    private Long version;</span>
+
+    @PreUpdate
+    protected void onUpdate() {
+<span class="nc" id="L77">        this.updateTime = LocalDateTime.now();</span>
+<span class="nc" id="L78">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
