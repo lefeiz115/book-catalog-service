@@ -1,6 +1,5 @@
 package com.eyebuy.bookcatalog.enums;
 
-import com.eyebuy.bookcatalog.enums.BookGenre;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

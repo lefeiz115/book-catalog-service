@@ -11,7 +11,6 @@ import com.eyebuy.bookcatalog.exception.BookNotFoundException;
 import com.eyebuy.bookcatalog.exception.DuplicateBookException;
 import com.eyebuy.bookcatalog.exception.InvalidBookStateException;
 import com.eyebuy.bookcatalog.repository.BookRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
